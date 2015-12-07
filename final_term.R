@@ -1,4 +1,3 @@
-
 library(plyr)
 library(data.table)
 library(dplyr)
@@ -14,222 +13,10 @@ library(adabag)
 library(mboost)
 library(ada)
 library(Metrics)
-
-#####################################################################################
-## Prediction
-#############################
-imp.df<-read.csv("data/yukiodb6.txt",header=TRUE,sep=",")
-half_df <- nrow(imp.df)/2 
-a.df <- imp.df[1:half_df, ] 
-b.df <- imp.df[(half_df + 1) : nrow(imp.df), ]
-#a.df <- imp.df[1:100000, ] 
-#b.df <- imp.df[100001:200000, ] 
-rm(imp.df)
-
-## using GBM
-system.time(gb.model <- gbm(clicked ~ ., data = a.df, n.trees = 4000, cv.folds = 2, distribution = "gaussian"))
-#system.time(gb.model <- gbm(clicked ~ ., data = a.df, n.trees = 2000, cv.folds = 2, distribution = "bernoulli"))
-#saveRDS(gb.model, file = "gb.model.tree.4000.gaussian.cv.2.RDS")
-#gb.model <- gbm(clicked ~ InvId + cityc + gender + hMod + others, data = a.df, n.trees = 2000, cv.folds = 2, distribution = "gaussian")
-#gb.model <- readRDS(file = "gb.model.RDS")
-best.iter <- gbm.perf(gb.model,method="cv")
-print(pretty.gbm.tree(gb.model,1))
-gb.predicted <- predict(gb.model, b.df, type = "response", n.trees = best.iter)
-gb.predicted.labels <- ifelse(gb.predicted > 0.2, 1, 0)
-gb.confm <- confusionMatrix(gb.predicted.labels,b.df$clicked)
-gb.confm
-## ROCR
-pred <- prediction(gb.predicted.labels, b.df$clicked)
-perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
-plot(perf, col=rainbow(5))
-abline(0,1)
-
-#
-
-
-# names(mat)
-# x<-mat[1:9]
-# y<-mat[11:20]
-# x<-cbind(x,y)
-# mat2<-data.frame(x)
-# rm(mat)
-# rm(x)
-# rm(y)
-# names(mat2)
-# 
-# imp.df<-mat2
-# rm(mat2)
-
-# half_df <- nrow(imp.df)/2 
-# a.df <- imp.df[1:half_df, ] 
-# b.df <- imp.df[(half_df + 1) : nrow(imp.df), ]
-a.df <- imp.df[1:100000, ] 
-b.df <- imp.df[100001:200000, ] 
-#rm(imp.df)
-
-# #### 
-# set.seed(999)
-# #fitControl <- trainControl(method = "repeatedcv", number = 4, repeats = 4)
-# system.time(glmboost.model <- train(as.factor(clicked) ~ agecat, data = a.df, method = "glmboost"))
-# glmboost.pred <- predict(glmboost.model, newdata =  b.df, type = "prob")[,2]
-# 
-# glmboost.pred <- predict(glmboost.model, probability = TRUE, type="response", newdata = b.df)
-# glmboost.predicted.labels <- ifelse(glmboost.pred > 0.5, 1, 0)
-# logit.confm <- confusionMatrix(glmboost.predicted.labels,b.df$clicked)
-# logit.confm
-
-
-
-
-
-
-
-
-## Using ada boosting
-adabag.model <- boosting(clicked ~ ., data = a.df, control=rpart.control(type = "response"))
-saveRDS(adabag.model, file = "adabag.model.RDS")
-adabag.pred <- predict.boosting(adabag.model, newdata= b.df)
-adabag.pred$confusion
-adabag.pred$error
-
-## Using package ada
-set.seed(1)
-system.time(ada.model <- ada(clicked ~ ., data = a.df, max.iter = 100, nu = 0.6, bag.frac = 0.1))
-ada.pred <- predict(ada.model, newdata= b.df)
-ada.confm <- confusionMatrix(ada.pred, b.df$clicked)
-ada.confm
-varplot(ada.model)
-plot(ada.model)
-saveRDS(ada.model, file = "ada.model.RDS")
-
-
-## Using rpart
-rpart.model <- rpart(clicked ~., data = a.df)
-rpart.pred <- predict(rpart.model, newdata = b.df)
-rpart.predicted.labels <- ifelse(rpart.pred > 0.2, 1, 0)
-rpart.confm <- confusionMatrix(rpart.predicted.labels,b.df$clicked)
-rpart.confm
-
-# using glmboost
-system.time(glmboost.model <- glmboost(as.factor(clicked) ~ ., data = a.df, family = binomial("logit")))
-glmboost.pred <- predict(glmboost.model, probability = TRUE, type="response", newdata = b.df)
-glmboost.predicted.labels <- ifelse(glmboost.pred > 0.5, 1, 0)
-logit.confm <- confusionMatrix(glmboost.predicted.labels,b.df$clicked)
-logit.confm
-
-## Using Logistic Regression
-#imp.df <- readRDS(file = "final.imp.df.RDS")
-# imp.df <- readRDS(file = "output/final.imp.df.1percent.RDS")
-# imp.df <- read.csv(file = "data/yukiodb4.txt")
-# half_df <- nrow(imp.df)/2 
-# a.df <- imp.df[1:half_df, ] 
-# b.df <- imp.df[(half_df + 1) : nrow(imp.df), ]
-
-
-# a.df <- imp.df[1:100000, ] 
-# b.df <- imp.df[100001:200000, ] 
-## remove outliers
-# a.df <- filter(a.df, age < 100)
-# b.df <- filter(b.df, age < 100)
-
-rm(imp.df)
-
-# system.time(mylogit <- glm(as.factor(clicked) ~ InvId + adType + hBrand + hMod + siteId + adZone + gender +  agecat + os + entertainment + games_app + music + books + fashion + lifestyle + business + sports + news, data = a.df, family = binomial("logit")))
-
-system.time(mylogit <- glm(as.factor(clicked) ~ ., data = a.df, family = binomial("logit")))
-mylogit.pred <- predict.glm(mylogit, probability = TRUE, type="response", newdata = b.df)
-mylogit.predicted.labels<-ifelse(mylogit.pred>0.5,1,0)
-logit.confm <- confusionMatrix(mylogit.predicted.labels,b.df$clicked)
-logit.confm
-## Check the actual distribution
-table(b.df$clicked)
-## ROC
-pred <- prediction(mylogit.predicted.labels, b.df$clicked)
-perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
-plot(perf, col=rainbow(10))
-
-
-#############
-# Naive Bayes #
-#############
-# remove city code
-# mat<-read.csv("data/yukiodb6.txt",header=TRUE,sep=",")
-# names(mat)
-# x<-mat[1:9]
-# y<-mat[11:20]
-# x<-cbind(x,y)
-# mat2<-data.frame(x)
-# rm(mat)
-# rm(x)
-# rm(y)
-# names(mat2)
-# 
-# imp.df<-mat2
-# rm(mat2)
-# half_df <- nrow(imp.df)/2 
-# a.df <- imp.df[1:half_df, ] 
-# b.df <- imp.df[(half_df + 1) : nrow(imp.df), ]
-# 
-# a.df <- imp.df[1:100000, ] 
-# b.df <- imp.df[100001:200000, ] 
-set.seed(1)
-mybayes<-naiveBayes(as.factor(clicked) ~., data=a.df)
-mybayes.pred<-predict(mybayes, b.df, type="raw")
-#mybayes.predicted.labels<-ifelse(mybayes.pred>0.5,1,0)
-mybayes.predicted.labels <- ifelse(mybayes.pred[, 1] > mybayes.pred[, 2], 0, 1)
-mybayes.confm <- confusionMatrix(mybayes.predicted.labels, b.df$clicked)
-mybayes.confm
-
-## Check the actual distribution
-table(b.df$clicked)
-## ROCR
-pred <- prediction(mybayes.predicted.labels, b.df$clicked)
-perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
-plot(perf, col=rainbow(5))
-
-
-
-
-#### using NN
-system.time(nn.model <- multinom(as.factor(clicked) ~ .,  data = a.df))
-nn.pred <- predict(nn.model,newdata = b.df)
-nn.confm <- confusionMatrix(nn.pred, b.df$clicked)
-nn.confm
-## Check the actual distribution
-table(b.df$clicked)
-
-## ROC
-pred <- prediction(nn.pred, b.df$clicked)
-perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
-plot(perf, col=rainbow(10))
-
-#### using Random Forest
-system.time(rf.model <- randomForest(as.factor(clicked) ~ InvId + adType + siteId + adZone + gender +  agecat + os + entertainment + games_app + music + books + fashion + lifestyle + business + sports + news, data = a.df, importance = TRUE))
-rf.predicted <- predict(rf.model, b.df)
-rf.confm <- confusionMatrix(rf.predicted, b.df$clicked)
-rf.confm
-saveRDS(rf.model, file = "rf.model.RDS")
-
-
-## usinf SVM
-system.time(svm.a.model <- svm(as.factor(clicked) ~ gender,  data = a.df ))
-svm.b.predicted <- predict(svm.a.model, b.df)
-svm.b.confm <- confusionMatrix(svm.b.predicted, b.df$clicked)
-svm.b.confm
-
-## PCA
-pca.a <- prcomp(a.df[, 2:19], scale = TRUE)
-
-## SMOTE
-## Run SMOTE
-p.o <- 100
-p.u <- 10
-a <- SMOTE(clicked ~ ., data = a.df, perc.over = p.o, perc.under = p.u, k=5)
-
-
-
+library(xgboost)
 
 ################################################################################
+## Data under sampling
 
 ## Function to read each click file. Keep only the selected columns
 read_click <- function(filename){
@@ -307,10 +94,162 @@ saveRDS(imp.df, file = paste("output/final.imp.df.1percent.RDS", sep = ""))
 ## Since we sampled the impressions we have to consider this when calculating the
 ## CTR, if needed.
 
+#####################################################################################
+## Feature engineering and data cleasing done in Pentaho.
 
 
+#####################################################################################
+## Prediction
+#############################
+imp.df<-read.csv("data/yukiodb7.txt",header=TRUE,sep=",")
+## half/ half
+half_df <- nrow(imp.df)/2 
+a.df <- imp.df[1:half_df, ] 
+b.df <- imp.df[(half_df + 1) : nrow(imp.df), ]
 
+## 66%, 33%
+third_df <- round(nrow(imp.df)/3) 
+a.df <- imp.df[1:(2*third_df), ] 
+b.df <- imp.df[((2*third_df) + 1) : nrow(imp.df), ]
 
+## 100000 / 100000
+a.df <- imp.df[1:100000, ] 
+b.df <- imp.df[100001:200000, ] 
+rm(imp.df)
 
+## using GBM
+#system.time(gb.model <- gbm(clicked ~ ., data = a.df, n.trees = 10000, distribution = "adaboost", verbose = TRUE, shrinkage = 0.0005))
+system.time(gb.model <- gbm(clicked ~ ., data = a.df, n.trees = 2000, distribution = "bernoulli", verbose = TRUE))
+saveRDS(gb.model, file = "gb.model.100k.obs.tree.2000.bernoulli.RDS")
+#gb.model <- gbm(clicked ~ InvId + cityc + gender + hMod + others, data = a.df, n.trees = 2000, cv.folds = 2, distribution = "gaussian")
+#gb.model <- readRDS(file = "gb.model.RDS")
+gb.model
+summary(gb.model)
+#best.iter <- gbm.perf(gb.model,method="cv")
+print(pretty.gbm.tree(gb.model,1))
+gb.predicted <- predict(gb.model, b.df, type = "response", n.trees = 2000)
+#gb.predicted <- predict(gb.model, b.df, type = "response", n.trees = best.iter)
+gb.predicted.labels <- ifelse(gb.predicted > 0.2, 1, 0)
+gb.confm <- confusionMatrix(gb.predicted.labels,b.df$clicked)
+gb.confm
+##
+gbm.perf(gb.model)
+## ROCR
+pred <- prediction(gb.predicted.labels, b.df$clicked)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
+plot(perf, col=rainbow(5))
+abline(0,1)
 
+## Cross validation
+system.time(gb.model.b <- gbm(clicked ~ ., data = b.df, n.trees = 2000, distribution = "bernoulli", verbose = TRUE))
+saveRDS(gb.model.b, file = "gb.model.b.100k.obs.tree.2000.bernoulli.RDS")
+#gb.model <- gbm(clicked ~ InvId + cityc + gender + hMod + others, data = a.df, n.trees = 2000, cv.folds = 2, distribution = "gaussian")
+#gb.model <- readRDS(file = "gb.model.RDS")
+gb.model.b
+summary(gb.model.b)
+#best.iter <- gbm.perf(gb.model,method="cv")
+print(pretty.gbm.tree(gb.model.b,1))
+gb.predicted.b <- predict(gb.model.b, a.df, type = "response", n.trees = 2000)
+#gb.predicted <- predict(gb.model, b.df, type = "response", n.trees = best.iter)
+gb.predicted.labels.b <- ifelse(gb.predicted.b > 0.23, 1, 0)
+gb.confm.b <- confusionMatrix(gb.predicted.labels.b, a.df$clicked)
+gb.confm.b
+##
+gbm.perf(gb.model.b)
+## ROCR
+pred.b <- prediction(gb.predicted.labels.b, a.df$clicked)
+perf.b <- performance(pred.b, measure = "tpr", x.measure = "fpr") 
+plot(perf.b, col=rainbow(5))
+abline(0,1)
 
+#############
+# Naive Bayes #
+#############
+
+set.seed(1)
+mybayes<-naiveBayes(as.factor(clicked) ~., data=a.df)
+mybayes.pred<-predict(mybayes, b.df, type="raw")
+mybayes.predicted.labels <- ifelse(mybayes.pred[, 1] > mybayes.pred[, 2], 0, 1)
+mybayes.confm <- confusionMatrix(mybayes.predicted.labels, b.df$clicked)
+mybayes.confm
+
+## Check the actual distribution
+table(b.df$clicked)
+## ROCR
+pred <- prediction(mybayes.predicted.labels, b.df$clicked)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
+plot(perf, col=rainbow(5))
+
+################################################################################
+## Using Logistic Regression
+
+system.time(mylogit <- glm(as.factor(clicked) ~ ., data = a.df, family = binomial("logit")))
+mylogit.pred <- predict.glm(mylogit, probability = TRUE, type="response", newdata = b.df)
+mylogit.predicted.labels<-ifelse(mylogit.pred>0.5,1,0)
+logit.confm <- confusionMatrix(mylogit.predicted.labels,b.df$clicked)
+logit.confm
+## Check the actual distribution
+table(b.df$clicked)
+## ROC
+pred <- prediction(mylogit.predicted.labels, b.df$clicked)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
+plot(perf, col=rainbow(10))
+
+################################################################################
+#### using NN
+system.time(nn.model <- multinom(as.factor(clicked) ~ .,  data = a.df))
+nn.pred <- predict(nn.model,newdata = b.df)
+nn.confm <- confusionMatrix(nn.pred, b.df$clicked)
+nn.confm
+## Check the actual distribution
+table(b.df$clicked)
+
+## ROC
+pred <- prediction(nn.pred, b.df$clicked)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
+plot(perf, col=rainbow(10))
+
+################################################################################
+## Using ada boosting
+adabag.model <- boosting(clicked ~ ., data = a.df, control=rpart.control(type = "response"))
+saveRDS(adabag.model, file = "adabag.model.RDS")
+adabag.pred <- predict.boosting(adabag.model, newdata= b.df)
+adabag.pred$confusion
+adabag.pred$error
+
+################################################################################
+## Using package ada
+set.seed(1)
+system.time(ada.model <- ada(clicked ~ ., data = a.df, max.iter = 100, nu = 0.6, bag.frac = 0.1))
+ada.pred <- predict(ada.model, newdata= b.df)
+ada.confm <- confusionMatrix(ada.pred, b.df$clicked)
+ada.confm
+varplot(ada.model)
+plot(ada.model)
+saveRDS(ada.model, file = "ada.model.RDS")
+
+################################################################################
+## Using rpart
+rpart.model <- rpart(clicked ~., data = a.df)
+rpart.pred <- predict(rpart.model, newdata = b.df)
+rpart.predicted.labels <- ifelse(rpart.pred > 0.2, 1, 0)
+rpart.confm <- confusionMatrix(rpart.predicted.labels,b.df$clicked)
+rpart.confm
+
+################################################################################
+# using glmboost
+system.time(glmboost.model <- glmboost(as.factor(clicked) ~ ., data = a.df, family = binomial("logit")))
+glmboost.pred <- predict(glmboost.model, probability = TRUE, type="response", newdata = b.df)
+glmboost.predicted.labels <- ifelse(glmboost.pred > 0.5, 1, 0)
+logit.confm <- confusionMatrix(glmboost.predicted.labels,b.df$clicked)
+logit.confm
+
+################################################################################
+#### using Random Forest
+system.time(rf.model <- randomForest(as.factor(clicked) ~ ., data = a.df, importance = TRUE))
+rf.predicted <- predict(rf.model, b.df)
+rf.confm <- confusionMatrix(rf.predicted, b.df$clicked)
+rf.confm
+saveRDS(rf.model, file = "rf.model.RDS")
+
+################################################################################
